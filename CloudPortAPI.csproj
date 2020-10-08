@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.DocDB" Version="3.3.102.44" />
+    <PackageReference Include="AWSSDK.S3" Version="3.3.110.19" />
+    <PackageReference Include="AWSSDK.SQS" Version="3.3.102.57" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.2.0" />
+    <PackageReference Include="CassandraCSharpDriver" Version="3.13.0" />
+    <PackageReference Include="Google.Cloud.PubSub.V1" Version="2.1.0" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="3.2.0" />
+    <PackageReference Include="Microsoft.Azure.ServiceBus" Version="4.1.1" />
+    <PackageReference Include="MongoDB.Driver" Version="2.10.1" />
+    <PackageReference Include="MySql.Data" Version="8.0.21" />
+    <PackageReference Include="System.ComponentModel" Version="4.3.0" />
+    <PackageReference Include="System.ComponentModel.Annotations" Version="4.7.0" />
+    <PackageReference Include="System.Data.Common" Version="4.3.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.0" />
+  </ItemGroup>
+
+</Project>
