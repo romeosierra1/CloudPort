@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -16,7 +17,7 @@ namespace CloudPortAPI.Services
         {
             _settings = settings;
         }
-        public int Add<T>(T obj) where T : class
+        public async Task<int> Add<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -25,13 +26,13 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateInsertQuery(type);
-                ExecuteStatement(query, obj);
+                await ExecuteStatement(query, obj);
             }
 
             return result;
         }
 
-        public int Add<T>(T[] list) where T : class
+        public async Task<int> Add<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -40,7 +41,7 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateInsertQuery(type);
-                ExecuteStatement(query, list, "insert");
+                await ExecuteStatement(query, list, "insert");
             }
 
             return result;
@@ -95,7 +96,7 @@ namespace CloudPortAPI.Services
             return query;
         }
 
-        public IEnumerable<T> Get<T>(T obj) where T : class
+        public async Task<IEnumerable<T>> Get<T>(T obj) where T : class
         {
             Type type = obj.GetType();
 
@@ -105,30 +106,33 @@ namespace CloudPortAPI.Services
             {
                 string query = $"SELECT * FROM {type.Name}";
 
-                var rowSet = ExecuteStatement(query, obj);
+                var rowSet = await ExecuteStatement(query, obj);
 
-                foreach (Row row in rowSet.GetRows())
+                await Task.Run(() =>
                 {
-                    var item = Activator.CreateInstance<T>();
-
-                    foreach (CqlColumn column in rowSet.Columns)
+                    foreach (Row row in rowSet.GetRows())
                     {
-                        PropertyInfo property = item.GetType().GetProperties().FirstOrDefault(p => p.Name == column.Name);
+                        var item = Activator.CreateInstance<T>();
 
-                        if (property != null && row.GetValue(column.Type, column.Name) != null)
+                        foreach (CqlColumn column in rowSet.Columns)
                         {
-                            property.SetValue(item, row.GetValue(column.Type, column.Name));
-                        }
-                    }
+                            PropertyInfo property = item.GetType().GetProperties().FirstOrDefault(p => p.Name == column.Name);
 
-                    result.Add(item);
-                }
+                            if (property != null && row.GetValue(column.Type, column.Name) != null)
+                            {
+                                property.SetValue(item, row.GetValue(column.Type, column.Name));
+                            }
+                        }
+
+                        result.Add(item);
+                    }
+                });                
             }
 
             return result;
         }
 
-        public int Remove<T>(T obj) where T : class
+        public async Task<int> Remove<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -138,13 +142,13 @@ namespace CloudPortAPI.Services
             {
                 string query = GenerateDeleteQuery(type);
 
-                ExecuteStatement(query, obj);
+                await ExecuteStatement(query, obj);
             }
 
             return result;
         }
 
-        public int Remove<T>(T[] list) where T : class
+        public async Task<int> Remove<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -154,7 +158,7 @@ namespace CloudPortAPI.Services
             {
                 string query = GenerateDeleteQuery(type);
 
-                ExecuteStatement(query, list, "delete");
+                await ExecuteStatement(query, list, "delete");
             }
 
             return result;
@@ -165,7 +169,7 @@ namespace CloudPortAPI.Services
             return $"DELETE FROM {type.Name} WHERE Id = :Id";
         }
 
-        public int Update<T>(T obj) where T : class
+        public async Task<int> Update<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -174,13 +178,13 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateUpdateQuery(type);
-                ExecuteStatement(query, obj);
+                await ExecuteStatement(query, obj);
             }
 
             return result;
         }
 
-        public int Update<T>(T[] list) where T : class
+        public async Task<int> Update<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -189,7 +193,7 @@ namespace CloudPortAPI.Services
             if(type.IsClass)
             {
                 string query = GenerateUpdateQuery(type);
-                ExecuteStatement(query, list, "update");
+                await ExecuteStatement(query, list, "update");
             }
 
             return result;
@@ -228,30 +232,36 @@ namespace CloudPortAPI.Services
             return query;
         }
 
-        private RowSet ExecuteStatement<T>(string query, T obj) where T : class
+        private async Task<RowSet> ExecuteStatement<T>(string query, T obj) where T : class
         {
             Type type = obj.GetType();
             Cluster cluster = CreateCluster(_settings.Cloud);
             ISession session = cluster.Connect(_settings.KeySpace);
+            RowSet rowSet = new RowSet();
 
-            var preparedStatement = session.Prepare(query);
-
-            List<object> parameters = new List<object>();
-
-            foreach (var propertyInfo in type.GetProperties())
+            await Task.Run(async () =>
             {
-                if (query.Contains($":{propertyInfo.Name}"))
+                var preparedStatement = session.Prepare(query);
+
+                List<object> parameters = new List<object>();
+
+                foreach (var propertyInfo in type.GetProperties())
                 {
-                    parameters.Add(propertyInfo.GetValue(obj));
+                    if (query.Contains($":{propertyInfo.Name}"))
+                    {
+                        parameters.Add(propertyInfo.GetValue(obj));
+                    }
                 }
-            }
 
-            var statement = preparedStatement.Bind(parameters.ToArray());
+                var statement = preparedStatement.Bind(parameters.ToArray());
 
-            return session.Execute(statement);
+                rowSet = await session.ExecuteAsync(statement);
+            });            
+
+            return rowSet;
         }
 
-        private RowSet ExecuteStatement<T>(string query, T[] list, string operation = "")
+        private async Task<RowSet> ExecuteStatement<T>(string query, T[] list, string operation = "")
         {
             Type type = list.FirstOrDefault().GetType();
             Cluster cluster = CreateCluster(_settings.Cloud);
@@ -265,31 +275,34 @@ namespace CloudPortAPI.Services
             int offset = 0;
             while (remainingRows > 0)
             {
-                offset = remainingRows > DatabaseService.Offest ? DatabaseService.Offest : remainingRows;
+                offset = remainingRows > DatabaseService.Offset ? DatabaseService.Offset : remainingRows;
                 end = start + offset;
 
-                var batchStatement = new BatchStatement();
-                batchStatement.SetBatchType(BatchType.Unlogged);
-
-                var preparedStatement = session.Prepare(query);
-
-                for (int i = start; i <= end; i++)
+                await Task.Run(async () => 
                 {
-                    List<object> parameters = new List<object>();
+                    var batchStatement = new BatchStatement();
+                    batchStatement.SetBatchType(BatchType.Unlogged);
 
-                    foreach (var propertyInfo in type.GetProperties())
+                    var preparedStatement = session.Prepare(query);
+
+                    for (int i = start; i <= end; i++)
                     {
-                        if (query.Contains($":{propertyInfo.Name}"))
+                        List<object> parameters = new List<object>();
+
+                        foreach (var propertyInfo in type.GetProperties())
                         {
-                            parameters.Add(propertyInfo.GetValue(list[i]));
+                            if (query.Contains($":{propertyInfo.Name}"))
+                            {
+                                parameters.Add(propertyInfo.GetValue(list[i]));
+                            }
                         }
+
+                        var boundStatement = preparedStatement.Bind(parameters.ToArray());
+                        batchStatement.Add(boundStatement);
                     }
 
-                    var boundStatement = preparedStatement.Bind(parameters.ToArray());
-                    batchStatement.Add(boundStatement);
-                }
-                
-                result = session.Execute(batchStatement);
+                    result = await session.ExecuteAsync(batchStatement);
+                });                
 
                 start = end + 1;
                 remainingRows = (list.Length - 1) - end;
@@ -305,7 +318,7 @@ namespace CloudPortAPI.Services
 
             List<T> result = new List<T>();
 
-            var childRecords = Get(child);
+            var childRecords = Get(child).Result;
 
             var parentId = Guid.Parse(parentType.GetProperties().Where(p => p.Name == "Id").FirstOrDefault().GetValue(parent).ToString());
 
@@ -341,7 +354,7 @@ namespace CloudPortAPI.Services
             Type parentType = parentList.FirstOrDefault().GetType();
             Type childType = child.GetType();
 
-            var childRecords = Get(child);
+            var childRecords = Get(child).Result;
 
             foreach (var parentRecord in parentList)
             {

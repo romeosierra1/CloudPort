@@ -14,7 +14,7 @@ namespace CloudPortAPI.Services
         {
             _settings = settings;
         }
-        public async void Receive()
+        public async Task Receive()
         {
             IQueueClient queueClient = new QueueClient(_settings.ConnectionString, _settings.QueueName);
 
@@ -37,7 +37,7 @@ namespace CloudPortAPI.Services
 
         }
         
-        public int Send(string[] messages)
+        public async Task<int> Send(string[] messages)
         {
             int result = 0;
 
@@ -46,10 +46,8 @@ namespace CloudPortAPI.Services
             foreach (var message in messages)
             {
                 var msg = new Message(Encoding.UTF8.GetBytes(message));
-
-                queueClient.SendAsync(msg).GetAwaiter().GetResult();
-            }
-            
+                await queueClient.SendAsync(msg);
+            }            
 
             return result;
         }        

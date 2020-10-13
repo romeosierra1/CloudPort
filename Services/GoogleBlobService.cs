@@ -41,7 +41,7 @@ namespace CloudPortAPI.Services
             // Download file
             using (var stream = File.OpenWrite(localFilePath))
             {
-                client.DownloadObject(bucketName, fileName, stream);
+                await client.DownloadObjectAsync(bucketName, fileName, stream);
             }
         }
 
@@ -56,7 +56,7 @@ namespace CloudPortAPI.Services
             //client.CreateBucket(_projectId, bucketName);
 
             // Upload some files
-            client.UploadObject(bucketName, fileName, "*/*", File.OpenRead(localFilePath));
+            await client.UploadObjectAsync(bucketName, fileName, "*/*", File.OpenRead(localFilePath));
         }
     }
 }

@@ -7,6 +7,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -17,7 +18,7 @@ namespace CloudPortAPI.Services
         {
             _settings = settings;
         }
-        public int Add<T>(T obj) where T : class
+        public async Task<int> Add<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -26,13 +27,13 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateInsertQuery(type);
-                RunCommand(query, obj);
+                await RunCommand(query, obj);
             }
 
             return result;
         }
 
-        public int Add<T>(T[] list) where T : class
+        public async Task<int> Add<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -41,7 +42,7 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateInsertQuery(type);
-                RunCommand(query, list, "insert");
+                await RunCommand(query, list, "insert");
             }
 
             return result;
@@ -90,7 +91,7 @@ namespace CloudPortAPI.Services
                     {
                         query += $"@{propertyInfo.Name}{postFix},";
                     }
-                    else if(_settings.SqlEngine.ToLower() == "mysql")
+                    else if (_settings.SqlEngine.ToLower() == "mysql")
                     {
                         query += $"@{propertyInfo.Name}{postFix},";
                     }
@@ -102,7 +103,7 @@ namespace CloudPortAPI.Services
             return query;
         }
 
-        public IEnumerable<T> Get<T>(T obj) where T : class
+        public async Task<IEnumerable<T>> Get<T>(T obj) where T : class
         {
             Type type = obj.GetType();
 
@@ -112,38 +113,41 @@ namespace CloudPortAPI.Services
             {
                 string query = $"SELECT * FROM {type.Name}";
 
-                DataTable dt = RunCommand(query, obj);
+                DataTable dt = await RunCommand(query, obj);
 
-                foreach (DataRow dataRow in dt.Rows)
+                await Task.Run(() => 
                 {
-                    var item = Activator.CreateInstance<T>();
-
-                    foreach (DataColumn column in dataRow.Table.Columns)
+                    foreach (DataRow dataRow in dt.Rows)
                     {
-                        PropertyInfo property = item.GetType().GetProperties().FirstOrDefault(p => p.Name == column.ColumnName);
+                        var item = Activator.CreateInstance<T>();
 
-                        if (property != null && dataRow[column] != DBNull.Value && dataRow[column].ToString() != "NULL")
+                        foreach (DataColumn column in dataRow.Table.Columns)
                         {
-                            Guid temp = Guid.Empty;
-                            if (Guid.TryParse(dataRow[column].ToString(), out temp))
+                            PropertyInfo property = item.GetType().GetProperties().FirstOrDefault(p => p.Name == column.ColumnName);
+
+                            if (property != null && dataRow[column] != DBNull.Value && dataRow[column].ToString() != "NULL")
                             {
-                                (item as TSqlModel).Id = temp;
-                            }
-                            else
-                            {
-                                property.SetValue(item, dataRow[column]);
+                                Guid temp = Guid.Empty;
+                                if (Guid.TryParse(dataRow[column].ToString(), out temp))
+                                {
+                                    (item as TSqlModel).Id = temp;
+                                }
+                                else
+                                {
+                                    property.SetValue(item, dataRow[column]);
+                                }
                             }
                         }
-                    }
 
-                    result.Add(item);
-                }
+                        result.Add(item);
+                    }
+                });                
             }
 
             return result;
         }
 
-        public int Remove<T>(T obj) where T : class
+        public async Task<int> Remove<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -153,13 +157,13 @@ namespace CloudPortAPI.Services
             {
                 string query = GenerateDeleteQuery(type);
 
-                RunCommand(query, obj);
+                await RunCommand(query, obj);
             }
 
             return result;
         }
 
-        public int Remove<T>(T[] list) where T : class
+        public async Task<int> Remove<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -171,25 +175,28 @@ namespace CloudPortAPI.Services
                 {
                     string query = GenerateDeleteQuery(type);
 
-                    //RunCommand(query, list);
-                    using (SqlConnection conn = new SqlConnection(_settings.ConnectionString))
+                    //RunCommand(query, list);                    
+                    await Task.Run(() =>
                     {
-                        SqlDataAdapter adp = new SqlDataAdapter($"SELECT * FROM {type.Name}", conn);
-                        SqlCommandBuilder cmdBuilder = new SqlCommandBuilder(adp);
-                        DataTable dt = new DataTable();
-                        SqlCommand cmd = new SqlCommand(query, conn);
-                        cmd.Parameters.Add(new SqlParameter("@Id", SqlDbType.UniqueIdentifier));
-                        cmd.Parameters["@Id"].SourceVersion = DataRowVersion.Original;
-                        cmd.Parameters["@Id"].SourceColumn = "Id";
-                        adp.DeleteCommand = cmd;
-                        adp.Fill(dt);
-                        //Console.WriteLine(cmdBuilder.GetDeleteCommand().CommandText);
-                        foreach (DataRow row in dt.Rows)
+                        using (SqlConnection conn = new SqlConnection(_settings.ConnectionString))
                         {
-                            row.Delete();
+                            SqlDataAdapter adp = new SqlDataAdapter($"SELECT * FROM {type.Name}", conn);
+                            SqlCommandBuilder cmdBuilder = new SqlCommandBuilder(adp);
+                            DataTable dt = new DataTable();
+                            SqlCommand cmd = new SqlCommand(query, conn);
+                            cmd.Parameters.Add(new SqlParameter("@Id", SqlDbType.UniqueIdentifier));
+                            cmd.Parameters["@Id"].SourceVersion = DataRowVersion.Original;
+                            cmd.Parameters["@Id"].SourceColumn = "Id";
+                            adp.DeleteCommand = cmd;
+                            adp.Fill(dt);
+                                //Console.WriteLine(cmdBuilder.GetDeleteCommand().CommandText);
+                                foreach (DataRow row in dt.Rows)
+                            {
+                                row.Delete();
+                            }
+                            adp.Update(dt);
                         }
-                        adp.Update(dt);
-                    }
+                    });
                 }
             }
             else if (_settings.SqlEngine.ToLower() == "mysql")
@@ -201,22 +208,26 @@ namespace CloudPortAPI.Services
                     string query = GenerateDeleteQuery(type);
 
                     //RunCommand(query, list);
-                    using (MySqlConnection conn = new MySqlConnection(_settings.ConnectionString))
+
+                    await Task.Run(() => 
                     {
-                        MySqlDataAdapter adp = new MySqlDataAdapter($"SELECT * FROM {type.Name}", conn);
-                        DataTable dt = new DataTable();
-                        MySqlCommand cmd = new MySqlCommand(query, conn);
-                        cmd.Parameters.Add(new MySqlParameter("@Id",MySqlDbType.Guid));
-                        cmd.Parameters["@Id"].SourceVersion = DataRowVersion.Original;
-                        cmd.Parameters["@Id"].SourceColumn = "Id";
-                        adp.DeleteCommand = cmd;
-                        adp.Fill(dt);
-                        foreach (DataRow row in dt.Rows)
+                        using (MySqlConnection conn = new MySqlConnection(_settings.ConnectionString))
                         {
-                            row.Delete();
+                            MySqlDataAdapter adp = new MySqlDataAdapter($"SELECT * FROM {type.Name}", conn);
+                            DataTable dt = new DataTable();
+                            MySqlCommand cmd = new MySqlCommand(query, conn);
+                            cmd.Parameters.Add(new MySqlParameter("@Id", MySqlDbType.Guid));
+                            cmd.Parameters["@Id"].SourceVersion = DataRowVersion.Original;
+                            cmd.Parameters["@Id"].SourceColumn = "Id";
+                            adp.DeleteCommand = cmd;
+                            adp.Fill(dt);
+                            foreach (DataRow row in dt.Rows)
+                            {
+                                row.Delete();
+                            }
+                            adp.Update(dt);
                         }
-                        adp.Update(dt);
-                    }
+                    });                    
                 }
             }
 
@@ -236,7 +247,7 @@ namespace CloudPortAPI.Services
             return null;
         }
 
-        public int Update<T>(T obj) where T : class
+        public async Task<int> Update<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -245,13 +256,13 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateUpdateQuery(type);
-                RunCommand(query, obj);
+                await RunCommand(query, obj);
             }
 
             return result;
         }
 
-        public int Update<T>(T[] list) where T : class
+        public async Task<int> Update<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -260,7 +271,7 @@ namespace CloudPortAPI.Services
             if (type.IsClass)
             {
                 string query = GenerateUpdateQuery(type);
-                RunCommand(query, list, "update");
+                await RunCommand(query, list, "update");
             }
 
             return result;
@@ -292,7 +303,7 @@ namespace CloudPortAPI.Services
                     {
                         query += propertyInfo.Name + " = @" + propertyInfo.Name + ",";
                     }
-                    
+
                 }
             }
             query = query.TrimEnd(',');
@@ -305,12 +316,12 @@ namespace CloudPortAPI.Services
             {
                 query += "Id = @Id";
             }
-            
+
 
             return query;
         }
 
-        private DataTable RunCommand<T>(string query, T obj) where T : class
+        private async Task<DataTable> RunCommand<T>(string query, T obj) where T : class
         {
             if (_settings.SqlEngine.ToLower() == "sqlserver")
             {
@@ -321,16 +332,19 @@ namespace CloudPortAPI.Services
                 SqlConnection sqlConnection = new SqlConnection(_settings.ConnectionString);
                 SqlCommand sqlCommand = new SqlCommand(query, sqlConnection);
 
-                foreach (var propertyInfo in type.GetProperties())
+                await Task.Run(() => 
                 {
-                    if (query.Contains($"@{propertyInfo.Name}"))
+                    foreach (var propertyInfo in type.GetProperties())
                     {
-                        sqlCommand.Parameters.Add(new SqlParameter($"@{propertyInfo.Name}", propertyInfo.GetValue(obj).ToString()));
+                        if (query.Contains($"@{propertyInfo.Name}"))
+                        {
+                            sqlCommand.Parameters.Add(new SqlParameter($"@{propertyInfo.Name}", propertyInfo.GetValue(obj).ToString()));
+                        }
                     }
-                }
 
-                SqlDataAdapter sqlDataAdapter = new SqlDataAdapter(sqlCommand);
-                sqlDataAdapter.Fill(dt);
+                    SqlDataAdapter sqlDataAdapter = new SqlDataAdapter(sqlCommand);
+                    sqlDataAdapter.Fill(dt);
+                });                
 
                 return dt;
             }
@@ -342,15 +356,20 @@ namespace CloudPortAPI.Services
                 MySqlCommand mySqlCommand = new MySqlCommand(query, mySqlConnection);
                 //mySqlConnection.Open();
                 //mySqlCommand.Prepare();
-                foreach (var propertyInfo in type.GetProperties())
+
+                await Task.Run(() => 
                 {
-                    if (query.Contains($"@{propertyInfo.Name}"))
+                    foreach (var propertyInfo in type.GetProperties())
                     {
-                        mySqlCommand.Parameters.Add(new MySqlParameter($"@{propertyInfo.Name}", propertyInfo.GetValue(obj).ToString()));
+                        if (query.Contains($"@{propertyInfo.Name}"))
+                        {
+                            mySqlCommand.Parameters.Add(new MySqlParameter($"@{propertyInfo.Name}", propertyInfo.GetValue(obj).ToString()));
+                        }
                     }
-                }
-                MySqlDataAdapter mySqlDataAdapter = new MySqlDataAdapter(mySqlCommand);
-                mySqlDataAdapter.Fill(dt);
+                    MySqlDataAdapter mySqlDataAdapter = new MySqlDataAdapter(mySqlCommand);
+                    mySqlDataAdapter.Fill(dt);
+                });
+                
                 //mySqlConnection.Close();
                 return dt;
             }
@@ -380,7 +399,7 @@ namespace CloudPortAPI.Services
             return dt;
         }
 
-        private DataTable RunCommand<T>(string query, T[] list, string operation = "") where T : class
+        private async Task<DataTable> RunCommand<T>(string query, T[] list, string operation = "") where T : class
         {
             if (_settings.SqlEngine.ToLower() == "sqlserver")
             {
@@ -402,65 +421,68 @@ namespace CloudPortAPI.Services
                 sqlDataAdapter.UpdateCommand = sqlCommand;
                 //}
 
-                for (int i = 0; i < type.GetProperties().Length; i++)
+                await Task.Run(() =>
                 {
-                    var propertyInfo = type.GetProperties()[i];
-                    bool IsParameter = true;
-                    if (propertyInfo.PropertyType.IsClass)
+                    for (int i = 0; i < type.GetProperties().Length; i++)
                     {
-                        if (propertyInfo.PropertyType.Name.ToLower() != "string")
+                        var propertyInfo = type.GetProperties()[i];
+                        bool IsParameter = true;
+                        if (propertyInfo.PropertyType.IsClass)
                         {
-                            IsParameter = false;
+                            if (propertyInfo.PropertyType.Name.ToLower() != "string")
+                            {
+                                IsParameter = false;
+                            }
+                        }
+
+                        if (IsParameter)
+                        {
+                            var sqlParam = new SqlParameter();
+                            var sqlParam1 = new SqlParameter();
+                            sqlParam.ParameterName = "@" + propertyInfo.Name;
+                            sqlParam1.ParameterName = "@" + propertyInfo.Name + "1";
+                            sqlParam.SourceColumn = propertyInfo.Name;
+                            sqlParam1.SourceColumn = propertyInfo.Name;
+
+                            sqlDataAdapter.InsertCommand.Parameters.Add(sqlParam);
+
+                            if (sqlParam1.ParameterName == "@Id")
+                            {
+                                sqlParam1.SourceVersion = DataRowVersion.Original;
+                            }
+                            sqlDataAdapter.UpdateCommand.Parameters.Add(sqlParam1);
                         }
                     }
 
-                    if (IsParameter)
+                    for (int i = 0; i < type.GetProperties().Length; i++)
                     {
-                        var sqlParam = new SqlParameter();
-                        var sqlParam1 = new SqlParameter();
-                        sqlParam.ParameterName = "@" + propertyInfo.Name;
-                        sqlParam1.ParameterName = "@" + propertyInfo.Name + "1";
-                        sqlParam.SourceColumn = propertyInfo.Name;
-                        sqlParam1.SourceColumn = propertyInfo.Name;
-
-                        sqlDataAdapter.InsertCommand.Parameters.Add(sqlParam);
-
-                        if (sqlParam1.ParameterName == "@Id")
-                        {
-                            sqlParam1.SourceVersion = DataRowVersion.Original;
-                        }
-                        sqlDataAdapter.UpdateCommand.Parameters.Add(sqlParam1);
+                        var propertyInfo = type.GetProperties()[i];
+                        dt.Columns.Add(propertyInfo.Name, propertyInfo.PropertyType);
                     }
-                }
 
-                for (int i = 0; i < type.GetProperties().Length; i++)
-                {
-                    var propertyInfo = type.GetProperties()[i];
-                    dt.Columns.Add(propertyInfo.Name, propertyInfo.PropertyType);
-                }
-
-                int remainingRows = list.Length - 1;
-                int start = 0;
-                int end = 0;
-                int offset = 0;
-                while (remainingRows > 0)
-                {
-                    offset = remainingRows > DatabaseService.Offest ? DatabaseService.Offest : remainingRows;
-                    end = start + offset;
-                    for (int i = start; i <= end; i++)
+                    int remainingRows = list.Length - 1;
+                    int start = 0;
+                    int end = 0;
+                    int offset = 0;
+                    while (remainingRows > 0)
                     {
-                        var obj = list[i];
-                        var dr = dt.NewRow();
-                        foreach (var propertyInfo in type.GetProperties())
+                        offset = remainingRows > DatabaseService.Offset ? DatabaseService.Offset : remainingRows;
+                        end = start + offset;
+                        for (int i = start; i <= end; i++)
                         {
-                            dr[propertyInfo.Name] = propertyInfo.GetValue(obj);
+                            var obj = list[i];
+                            var dr = dt.NewRow();
+                            foreach (var propertyInfo in type.GetProperties())
+                            {
+                                dr[propertyInfo.Name] = propertyInfo.GetValue(obj);
+                            }
+                            dt.Rows.Add(dr);
                         }
-                        dt.Rows.Add(dr);
+                        sqlDataAdapter.Update(dt);
+                        start = end + 1;
+                        remainingRows = (list.Length - 1) - end;
                     }
-                    sqlDataAdapter.Update(dt);
-                    start = end + 1;
-                    remainingRows = (list.Length - 1) - end;
-                }
+                });
 
                 return dt;
             }
@@ -484,65 +506,68 @@ namespace CloudPortAPI.Services
                 mySqlDataAdapter.UpdateCommand = mySqlCommand;
                 //}
 
-                for (int i = 0; i < type.GetProperties().Length; i++)
+                await Task.Run(() =>
                 {
-                    var propertyInfo = type.GetProperties()[i];
-                    bool IsParameter = true;
-                    if (propertyInfo.PropertyType.IsClass)
+                    for (int i = 0; i < type.GetProperties().Length; i++)
                     {
-                        if (propertyInfo.PropertyType.Name.ToLower() != "string")
+                        var propertyInfo = type.GetProperties()[i];
+                        bool IsParameter = true;
+                        if (propertyInfo.PropertyType.IsClass)
                         {
-                            IsParameter = false;
+                            if (propertyInfo.PropertyType.Name.ToLower() != "string")
+                            {
+                                IsParameter = false;
+                            }
+                        }
+
+                        if (IsParameter)
+                        {
+                            var sqlParam = new MySqlParameter();
+                            var sqlParam1 = new MySqlParameter();
+                            sqlParam.ParameterName = "@" + propertyInfo.Name;
+                            sqlParam1.ParameterName = "@" + propertyInfo.Name + "1";
+                            sqlParam.SourceColumn = propertyInfo.Name;
+                            sqlParam1.SourceColumn = propertyInfo.Name;
+
+                            mySqlDataAdapter.InsertCommand.Parameters.Add(sqlParam);
+
+                            if (sqlParam1.ParameterName == "@Id")
+                            {
+                                sqlParam1.SourceVersion = DataRowVersion.Original;
+                            }
+                            mySqlDataAdapter.UpdateCommand.Parameters.Add(sqlParam1);
                         }
                     }
 
-                    if (IsParameter)
+                    for (int i = 0; i < type.GetProperties().Length; i++)
                     {
-                        var sqlParam = new MySqlParameter();
-                        var sqlParam1 = new MySqlParameter();
-                        sqlParam.ParameterName = "@" + propertyInfo.Name;
-                        sqlParam1.ParameterName = "@" + propertyInfo.Name + "1";
-                        sqlParam.SourceColumn = propertyInfo.Name;
-                        sqlParam1.SourceColumn = propertyInfo.Name;
-
-                        mySqlDataAdapter.InsertCommand.Parameters.Add(sqlParam);
-
-                        if (sqlParam1.ParameterName == "@Id")
-                        {
-                            sqlParam1.SourceVersion = DataRowVersion.Original;
-                        }
-                        mySqlDataAdapter.UpdateCommand.Parameters.Add(sqlParam1);
+                        var propertyInfo = type.GetProperties()[i];
+                        dt.Columns.Add(propertyInfo.Name, propertyInfo.PropertyType);
                     }
-                }
 
-                for (int i = 0; i < type.GetProperties().Length; i++)
-                {
-                    var propertyInfo = type.GetProperties()[i];
-                    dt.Columns.Add(propertyInfo.Name, propertyInfo.PropertyType);
-                }
-
-                int remainingRows = list.Length - 1;
-                int start = 0;
-                int end = 0;
-                int offset = 0;
-                while (remainingRows > 0)
-                {
-                    offset = remainingRows > DatabaseService.Offest ? DatabaseService.Offest : remainingRows;
-                    end = start + offset;
-                    for (int i = start; i <= end; i++)
+                    int remainingRows = list.Length - 1;
+                    int start = 0;
+                    int end = 0;
+                    int offset = 0;
+                    while (remainingRows > 0)
                     {
-                        var obj = list[i];
-                        var dr = dt.NewRow();
-                        foreach (var propertyInfo in type.GetProperties())
+                        offset = remainingRows > DatabaseService.Offset ? DatabaseService.Offset : remainingRows;
+                        end = start + offset;
+                        for (int i = start; i <= end; i++)
                         {
-                            dr[propertyInfo.Name] = propertyInfo.GetValue(obj);
+                            var obj = list[i];
+                            var dr = dt.NewRow();
+                            foreach (var propertyInfo in type.GetProperties())
+                            {
+                                dr[propertyInfo.Name] = propertyInfo.GetValue(obj);
+                            }
+                            dt.Rows.Add(dr);
                         }
-                        dt.Rows.Add(dr);
+                        mySqlDataAdapter.Update(dt);
+                        start = end + 1;
+                        remainingRows = (list.Length - 1) - end;
                     }
-                    mySqlDataAdapter.Update(dt);
-                    start = end + 1;
-                    remainingRows = (list.Length - 1) - end;
-                }
+                });                
 
                 return dt;
             }
@@ -556,7 +581,7 @@ namespace CloudPortAPI.Services
 
             List<T> result = new List<T>();
 
-            var childRecords = Get(child);
+            var childRecords = Get(child).Result;
 
             var parentId = Guid.Parse(parentType.GetProperties().Where(p => p.Name == "Id").FirstOrDefault().GetValue(parent).ToString());
 
@@ -564,7 +589,7 @@ namespace CloudPortAPI.Services
             {
                 foreach (var childRecordProperty in childType.GetProperties())
                 {
-                    if (childRecordProperty.Name ==  $"{parentType.Name}Id")
+                    if (childRecordProperty.Name == $"{parentType.Name}Id")
                     {
                         if (Guid.Parse(childRecordProperty.GetValue(childRecord).ToString()) == parentId)
                         {
@@ -592,7 +617,7 @@ namespace CloudPortAPI.Services
             Type parentType = parentList.FirstOrDefault().GetType();
             Type childType = child.GetType();
 
-            var childRecords = Get(child);
+            var childRecords = Get(child).Result;
 
             foreach (var parentRecord in parentList)
             {

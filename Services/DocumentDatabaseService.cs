@@ -5,6 +5,7 @@ using CloudPortAPI.Models;
 using System.Linq;
 using System.Reflection;
 using MongoDB.Bson;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -50,17 +51,17 @@ namespace CloudPortAPI.Services
             return _database.GetCollection<T>(model.GetType().Name);
         }
 
-        public int Add<T>(T obj) where T : class
+        public async Task<int> Add<T>(T obj) where T : class
         {
             var collection = GetCollection(obj);
             int result = 0;
 
-            collection.InsertOne(obj);
+            await collection.InsertOneAsync(obj);
 
             return result;
         }
 
-        public int Add<T>(T[] list) where T : class
+        public async Task<int> Add<T>(T[] list) where T : class
         {
             var obj = list.FirstOrDefault();
             var collection = GetCollection(obj);
@@ -72,7 +73,7 @@ namespace CloudPortAPI.Services
             int offset = 0;
             while (remainingRows > 0)
             {
-                offset = remainingRows > DatabaseService.Offest ? DatabaseService.Offest : remainingRows;
+                offset = remainingRows > DatabaseService.Offset ? DatabaseService.Offset : remainingRows;
                 end = start + offset;
 
                 List<T> data = new List<T>();
@@ -82,7 +83,7 @@ namespace CloudPortAPI.Services
                     data.Add(list[i]);
                 }
 
-                collection.InsertMany(data);
+                await collection.InsertManyAsync(data);
 
                 start = end + 1;
                 remainingRows = (list.Length - 1) - end;
@@ -91,16 +92,16 @@ namespace CloudPortAPI.Services
             return result;
         }
 
-        public IEnumerable<T> Get<T>(T obj) where T : class
+        public async Task<IEnumerable<T>> Get<T>(T obj) where T : class
         {
             var collection = GetCollection(obj);
 
-            var list = collection.Find(new BsonDocument()).ToList<T>();
+            IEnumerable<T> list = (await collection.FindAsync(new BsonDocument())).ToList<T>();
 
             return list;
         }
 
-        public int Remove<T>(T obj) where T : class
+        public async Task<int> Remove<T>(T obj) where T : class
         {
             var collection = GetCollection(obj);
             int result = 0;
@@ -112,12 +113,12 @@ namespace CloudPortAPI.Services
             //string id = propertyInfo.GetValue(obj).ToString();
             Guid id = Guid.Parse(propertyInfo.GetValue(obj).ToString());
 
-            collection.DeleteOne(o => (o as TMongoModel).Id == id);
+            await collection.DeleteOneAsync(o => (o as TMongoModel).Id == id);
 
             return result;
         }
 
-        public int Remove<T>(T[] list) where T : class
+        public async Task<int> Remove<T>(T[] list) where T : class
         {
             var obj = list.FirstOrDefault();
 
@@ -135,12 +136,12 @@ namespace CloudPortAPI.Services
                 bulkDelete.Add(deleteMany);
             }
 
-            collection.BulkWrite(bulkDelete);
+            await collection.BulkWriteAsync(bulkDelete);
 
             return result;
         }
 
-        public int Update<T>(T obj) where T : class
+        public async Task<int> Update<T>(T obj) where T : class
         {
             var collection = GetCollection(obj);
             int result = 0;
@@ -151,12 +152,12 @@ namespace CloudPortAPI.Services
 
             //string id = propertyInfo.GetValue(obj).ToString();
             Guid id = Guid.Parse(propertyInfo.GetValue(obj).ToString());
-            collection.ReplaceOne(o => (o as TMongoModel).Id == id, obj);
+            await collection.ReplaceOneAsync(o => (o as TMongoModel).Id == id, obj);
 
             return result;
         }
 
-        public int Update<T>(T[] list) where T : class
+        public async Task<int> Update<T>(T[] list) where T : class
         {
             var obj = list.FirstOrDefault();
 
@@ -173,8 +174,8 @@ namespace CloudPortAPI.Services
 
             //collection.BulkWrite(bulkUpdate);
 
-            Remove(list);
-            Add(list);
+            await Remove(list);
+            await Add(list);
 
             return result;
         }

@@ -1,8 +1,10 @@
-﻿namespace CloudPortAPI.Services
+﻿using System.Threading.Tasks;
+
+namespace CloudPortAPI.Services
 {
     public interface IMessageQueueService
     {
-        int Send(string[] messages);
-        void Receive();
+        Task<int> Send(string[] messages);
+        Task Receive();
     }
 }

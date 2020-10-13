@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -11,7 +12,7 @@ namespace CloudPortAPI.Services
         private DocumentDatabaseService _noSqlDatabaseContext;
         private ColumnarDatabaseService _columnarDatabaseContext;
 
-        public static int Offest = 999;
+        public static int Offset = 999;
 
         public DatabaseService(SqlDatabaseSettings sqlDatabaseSettings,
             MongoDatabaseSettings mongoDatabaseSettings,
@@ -35,7 +36,7 @@ namespace CloudPortAPI.Services
             }
         }
 
-        public int Add<T>(T obj) where T : class
+        public async Task<int> Add<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -43,21 +44,21 @@ namespace CloudPortAPI.Services
 
             if (type.BaseType.Name == "TSqlModel")
             {
-                _sqlDatabaseContext.Add(obj);
+                await _sqlDatabaseContext.Add(obj);
             }
             else if (type.BaseType.Name == "TMongoModel")
             {
-                _noSqlDatabaseContext.Add(obj);
+                await _noSqlDatabaseContext.Add(obj);
             }
             else if (type.BaseType.Name == "TColumnarModel")
             {
-                _columnarDatabaseContext.Add(obj);
+                await _columnarDatabaseContext.Add(obj);
             }
 
             return result;
         }
 
-        public int Add<T>(T[] list) where T : class
+        public async Task<int> Add<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -67,22 +68,22 @@ namespace CloudPortAPI.Services
 
                 if (type.BaseType.Name == "TSqlModel")
                 {
-                    _sqlDatabaseContext.Add(list);
+                    await _sqlDatabaseContext.Add(list);
                 }
                 else if (type.BaseType.Name == "TMongoModel")
                 {
-                    _noSqlDatabaseContext.Add(list);
+                    await _noSqlDatabaseContext.Add(list);
                 }
                 else if (type.BaseType.Name == "TColumnarModel")
                 {
-                    _columnarDatabaseContext.Add(list);
+                    await _columnarDatabaseContext.Add(list);
                 }
             }
 
             return result;
         }
 
-        public IEnumerable<T> Get<T>(T obj) where T : class
+        public async Task<IEnumerable<T>> Get<T>(T obj) where T : class
         {
             var type = obj.GetType();
 
@@ -90,41 +91,18 @@ namespace CloudPortAPI.Services
 
             if (type.BaseType.Name == "TSqlModel")
             {
-                list = _sqlDatabaseContext.Get(obj);
+                list = await _sqlDatabaseContext.Get(obj);
             }
             else if (type.BaseType.Name == "TMongoModel")
             {
-                list = _noSqlDatabaseContext.Get(obj);
+                list = await _noSqlDatabaseContext.Get(obj);
             }
             else if (type.BaseType.Name == "TColumnarModel")
             {
-                list = _columnarDatabaseContext.Get(obj);
+                list = await _columnarDatabaseContext.Get(obj);
             }
 
             return list;
-        }
-
-        public IEnumerable<T> Get<T>(T[] list) where T : class
-        {
-            if (list.Count() > 0)
-            {
-                var type = list.FirstOrDefault().GetType();
-
-                if (type.BaseType.Name == "TSqlModel")
-                {
-                    _sqlDatabaseContext.Get(list);
-                }
-                else if (type.BaseType.Name == "TMongoModel")
-                {
-                    _noSqlDatabaseContext.Get(list);
-                }
-                else if (type.BaseType.Name == "TColumnarModel")
-                {
-                    _columnarDatabaseContext.Get(list);
-                }
-            }
-
-            return new List<T>();
         }
 
         public void Join<TP, T>(ref TP parent, T child) where T : class
@@ -166,7 +144,7 @@ namespace CloudPortAPI.Services
             }
         }
 
-        public int Remove<T>(T obj) where T : class
+        public async Task<int> Remove<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -174,21 +152,21 @@ namespace CloudPortAPI.Services
 
             if (type.BaseType.Name == "TSqlModel")
             {
-                _sqlDatabaseContext.Remove(obj);
+                await _sqlDatabaseContext.Remove(obj);
             }
             else if (type.BaseType.Name == "TMongoModel")
             {
-                _noSqlDatabaseContext.Remove(obj);
+                await _noSqlDatabaseContext.Remove(obj);
             }
             else if (type.BaseType.Name == "TColumnarModel")
             {
-                _columnarDatabaseContext.Remove(obj);
+                await _columnarDatabaseContext.Remove(obj);
             }
 
             return result;
         }
 
-        public int Remove<T>(T[] list) where T : class
+        public async Task<int> Remove<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -198,22 +176,22 @@ namespace CloudPortAPI.Services
 
                 if (type.BaseType.Name == "TSqlModel")
                 {
-                    _sqlDatabaseContext.Remove(list);
+                    await _sqlDatabaseContext.Remove(list);
                 }
                 else if (type.BaseType.Name == "TMongoModel")
                 {
-                    _noSqlDatabaseContext.Remove(list);
+                    await _noSqlDatabaseContext.Remove(list);
                 }
                 else if (type.BaseType.Name == "TColumnarModel")
                 {
-                    _columnarDatabaseContext.Remove(list);
+                    await _columnarDatabaseContext.Remove(list);
                 }
             }
 
             return result;
         }
 
-        public int Update<T>(T obj) where T : class
+        public async Task<int> Update<T>(T obj) where T : class
         {
             int result = 0;
 
@@ -221,21 +199,21 @@ namespace CloudPortAPI.Services
 
             if (type.BaseType.Name == "TSqlModel")
             {
-                _sqlDatabaseContext.Update(obj);
+                await _sqlDatabaseContext.Update(obj);
             }
             else if (type.BaseType.Name == "TMongoModel")
             {
-                _noSqlDatabaseContext.Update(obj);
+                await _noSqlDatabaseContext.Update(obj);
             }
             else if (type.BaseType.Name == "TColumnarModel")
             {
-                _columnarDatabaseContext.Update(obj);
+                await _columnarDatabaseContext.Update(obj);
             }
 
             return result;
         }
 
-        public int Update<T>(T[] list) where T : class
+        public async Task<int> Update<T>(T[] list) where T : class
         {
             int result = 0;
 
@@ -245,15 +223,15 @@ namespace CloudPortAPI.Services
 
                 if (type.BaseType.Name == "TSqlModel")
                 {
-                    _sqlDatabaseContext.Update(list);
+                    await _sqlDatabaseContext.Update(list);
                 }
                 else if (type.BaseType.Name == "TMongoModel")
                 {
-                    _noSqlDatabaseContext.Update(list);
+                    await _noSqlDatabaseContext.Update(list);
                 }
                 else if (type.BaseType.Name == "TColumnarModel")
                 {
-                    _columnarDatabaseContext.Update(list);
+                    await _columnarDatabaseContext.Update(list);
                 }
             }
 

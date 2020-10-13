@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -26,7 +27,7 @@ namespace CloudPortAPI.Services
             subscriber = SubscriberServiceApiClient.Create();
         }
 
-        public void Receive()
+        public async Task Receive()
         { 
             TopicName topicName = new TopicName(_projectId, _topicId);
             //publisher.CreateTopic(topicName);
@@ -53,7 +54,7 @@ namespace CloudPortAPI.Services
             //publisher.DeleteTopic(topicName);
         }
 
-        public int Send(string[] messages)
+        public async Task<int> Send(string[] messages)
         {
             // First create a topic.
             PublisherServiceApiClient publisher = PublisherServiceApiClient.Create();

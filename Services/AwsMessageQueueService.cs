@@ -1,6 +1,8 @@
 ﻿using Amazon.SQS;
 using Amazon.SQS.Model;
 using CloudPortAPI.Config;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace CloudPortAPI.Services
 {
@@ -14,7 +16,7 @@ namespace CloudPortAPI.Services
             _cred = cred;
         }
 
-        public void Receive()
+        public async Task Receive()
         {
             AmazonSQSConfig amazonSQSConfig = new AmazonSQSConfig();
 
@@ -24,18 +26,25 @@ namespace CloudPortAPI.Services
             ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(_settings.QueueUrl);
             receiveMessageRequest.MaxNumberOfMessages = 10;
 
+            List<Message> messages = new List<Message>();
+
             while (true)
             {
-                var messages = amazonSQSClient.ReceiveMessageAsync(receiveMessageRequest).Result.Messages;
-                if(messages.Count == 0)
+                var msgs = await amazonSQSClient.ReceiveMessageAsync(receiveMessageRequest);
+                if(msgs.Messages.Count == 0)
                 {
                     break;
                 }
+                else
+                {
+                    messages.AddRange(msgs.Messages);
+                }
             }
             //Return actual messages
+            //return messages;
         }
 
-        public int Send(string[] messages)
+        public async Task<int> Send(string[] messages)
         {
             int result = 0;
             AmazonSQSConfig amazonSQSConfig = new AmazonSQSConfig();
@@ -45,7 +54,7 @@ namespace CloudPortAPI.Services
 
             foreach (var message in messages)
             {
-                SendMessageResponse sendMessageResponse = amazonSQSClient.SendMessageAsync(_settings.QueueUrl, message).Result;
+                SendMessageResponse sendMessageResponse = await amazonSQSClient.SendMessageAsync(_settings.QueueUrl, message);
             }
             
             return result;
